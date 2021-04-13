@@ -668,9 +668,9 @@ void MarlinUI::draw_status_screen() {
   //
 
   lcd.setCursor(0, 0);
-  _draw_axis_value(X_AXIS, ftostr4sign(LOGICAL_X_POSITION(current_position[X_AXIS])), blink); lcd.write(' ');
-  _draw_axis_value(Y_AXIS, ftostr4sign(LOGICAL_Y_POSITION(current_position[Y_AXIS])), blink); lcd.write(' ');
-  _draw_axis_value(Z_AXIS, ftostr52sp(LOGICAL_Z_POSITION(current_position[Z_AXIS])), blink);
+  _draw_axis_value(X_AXIS, ftostr4sign(LOGICAL_X_POSITION(current_position.x)), blink); lcd.write(' ');
+  _draw_axis_value(Y_AXIS, ftostr4sign(LOGICAL_Y_POSITION(current_position.y)), blink); lcd.write(' ');
+  _draw_axis_value(Z_AXIS, ftostr52sp(LOGICAL_Z_POSITION(current_position.z)), blink);
 
   #if HAS_LEVELING && !HAS_HEATED_BED
     lcd.write(planner.leveling_active || blink ? '_' : ' ');
@@ -750,7 +750,7 @@ void MarlinUI::draw_status_screen() {
     #if HOTENDS > 2
       _draw_heater_status(H_E2, "HE3", blink); // Hotend 3 Temperature
     #endif
-  #endif // HOTENDS <= 1
+  #endif
 
   #if HAS_HEATED_BED
     #if HAS_LEVELING
@@ -758,16 +758,15 @@ void MarlinUI::draw_status_screen() {
     #else
       _draw_heater_status(H_BED, "BED", blink);
     #endif
-  #endif // HAS_HEATED_BED
+  #endif
 
   #if HAS_FAN
     uint16_t spd = thermalManager.fan_speed[0];
-
     #if ENABLED(ADAPTIVE_FAN_SLOWING)
       if (!blink) spd = thermalManager.scaledFanSpeed(0, spd);
     #endif
+    uint16_t per = thermalManager.pwmToPercent(spd);
 
-    uint16_t per = thermalManager.fanPercent(spd);
     #if HOTENDS < 2
       #define FANX 11
     #else
@@ -835,7 +834,7 @@ void MarlinUI::draw_status_screen() {
   }
 
   // Draw a menu item with a (potentially) editable value
-  void MenuEditItemBase::draw(const bool sel, const uint8_t row, PGM_P const pstr, const char* const data, const bool pgm) {
+  void MenuEditItemBase::draw(const bool sel, const uint8_t row, PGM_P const pstr, const char * const data, const bool pgm) {
     if (!PanelDetected) return;
     const uint8_t vlen = data ? (pgm ? utf8_strlen_P(data) : utf8_strlen(data)) : 0;
     lcd.setCursor(0, row);
@@ -851,7 +850,7 @@ void MarlinUI::draw_status_screen() {
 
   // Low-level draw_edit_screen can be used to draw an edit screen from anyplace
   // This line moves to the last line of the screen for UBL plot screen on the panel side
-  void MenuEditItemBase::draw_edit_screen(PGM_P const pstr, const char* const value/*=nullptr*/) {
+  void MenuEditItemBase::draw_edit_screen(PGM_P const pstr, const char * const value/*=nullptr*/) {
     if (!PanelDetected) return;
     ui.encoder_direction_normal();
     const uint8_t y = TERN0(AUTO_BED_LEVELING_UBL, ui.external_control) ? LCD_HEIGHT - 1 : MIDDLE_Y;
@@ -941,7 +940,7 @@ void MarlinUI::draw_status_screen() {
       // Show the location value
       lcd.setCursor(_LCD_W_POS, 3); lcd_put_u8str_P(PSTR("Z:"));
 
-      if (!isnan(ubl.z_values[x_plot][y_plot]))
+      if (!ISNAN(ubl.z_values[x_plot][y_plot]))
         lcd.print(ftostr43sign(ubl.z_values[x_plot][y_plot]));
       else
         lcd_put_u8str_P(PSTR(" -----"));
