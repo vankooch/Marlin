@@ -47,6 +47,7 @@
 
 void MarlinUI::tft_idle() {
   #if ENABLED(TOUCH_SCREEN)
+    if (TERN0(HAS_TOUCH_SLEEP, lcd_sleep_task())) return;
     if (draw_menu_navigation) {
       add_control(164, TFT_HEIGHT - 50, PAGE_UP, imgPageUp, encoderTopLine > 0);
       add_control(796, TFT_HEIGHT - 50, PAGE_DOWN, imgPageDown, encoderTopLine + LCD_HEIGHT < screen_items);
@@ -653,10 +654,12 @@ static void drawAxisValue(const AxisEnum axis) {
 static void moveAxis(const AxisEnum axis, const int8_t direction) {
   quick_feedback();
 
-  if (axis == E_AXIS && thermalManager.tooColdToExtrude(motionAxisState.e_selection)) {
-    drawMessage("Too cold");
-    return;
-  }
+  #if ENABLED(PREVENT_COLD_EXTRUSION)
+    if (axis == E_AXIS && thermalManager.tooColdToExtrude(motionAxisState.e_selection)) {
+      drawMessage("Too cold");
+      return;
+    }
+  #endif
 
   const float diff = motionAxisState.currentStepSize * direction;
 

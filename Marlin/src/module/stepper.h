@@ -133,27 +133,6 @@
 
 #endif
 
-// Add time for each stepper
-#if HAS_X_STEP
-  #define ISR_X_STEPPER_CYCLES       ISR_STEPPER_CYCLES
-#else
-  #define ISR_X_STEPPER_CYCLES       0UL
-#endif
-#if HAS_Y_STEP
-  #define ISR_Y_STEPPER_CYCLES       ISR_STEPPER_CYCLES
-#else
-  #define ISR_START_Y_STEPPER_CYCLES 0UL
-  #define ISR_Y_STEPPER_CYCLES       0UL
-#endif
-#if HAS_Z_STEP
-  #define ISR_Z_STEPPER_CYCLES       ISR_STEPPER_CYCLES
-#else
-  #define ISR_Z_STEPPER_CYCLES       0UL
-#endif
-
-// E is always interpolated, even for mixing extruders
-#define ISR_E_STEPPER_CYCLES         ISR_STEPPER_CYCLES
-
 // If linear advance is disabled, the loop also handles them
 #if DISABLED(LIN_ADVANCE) && ENABLED(MIXING_EXTRUDER)
   #define ISR_MIXING_STEPPER_CYCLES ((MIXING_STEPPERS) * (ISR_STEPPER_CYCLES))
@@ -161,8 +140,31 @@
   #define ISR_MIXING_STEPPER_CYCLES  0UL
 #endif
 
+// Add time for each stepper
+#if HAS_X_STEP
+  #define ISR_X_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_Y_STEP
+  #define ISR_Y_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_Z_STEP
+  #define ISR_Z_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_I_STEP
+  #define ISR_I_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_J_STEP
+  #define ISR_J_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_K_STEP
+  #define ISR_K_STEPPER_CYCLES  ISR_STEPPER_CYCLES
+#endif
+#if HAS_EXTRUDERS
+  #define ISR_E_STEPPER_CYCLES  ISR_STEPPER_CYCLES    // E is always interpolated, even for mixing extruders
+#endif
+
 // And the total minimum loop time, not including the base
-#define MIN_ISR_LOOP_CYCLES (ISR_X_STEPPER_CYCLES + ISR_Y_STEPPER_CYCLES + ISR_Z_STEPPER_CYCLES + ISR_E_STEPPER_CYCLES + ISR_MIXING_STEPPER_CYCLES)
+#define MIN_ISR_LOOP_CYCLES (ISR_MIXING_STEPPER_CYCLES LOGICAL_AXIS_GANG(+ ISR_E_STEPPER_CYCLES, + ISR_X_STEPPER_CYCLES, + ISR_Y_STEPPER_CYCLES, + ISR_Z_STEPPER_CYCLES, + ISR_I_STEPPER_CYCLES, + ISR_J_STEPPER_CYCLES, + ISR_K_STEPPER_CYCLES))
 
 // Calculate the minimum MPU cycles needed per pulse to enforce, limited to the max stepper rate
 #define _MIN_STEPPER_PULSE_CYCLES(N) _MAX(uint32_t((F_CPU) / (MAXIMUM_STEPPER_RATE)), ((F_CPU) / 500000UL) * (N))
@@ -274,8 +276,8 @@ class Stepper {
 
     static block_t* current_block;          // A pointer to the block currently being traced
 
-    static uint8_t last_direction_bits,     // The next stepping-bits to be output
-                   axis_did_move;           // Last Movement in the given direction is not null, as computed when the last movement was fetched from planner
+    static axis_bits_t last_direction_bits, // The next stepping-bits to be output
+                       axis_did_move;       // Last Movement in the given direction is not null, as computed when the last movement was fetched from planner
 
     static bool abort_current_block;        // Signals to the stepper that current block should be aborted
 
@@ -370,11 +372,11 @@ class Stepper {
         uint8_t cur_power;  // Current laser power
         bool cruise_set;    // Power set up for cruising?
 
-        #if DISABLED(LASER_POWER_INLINE_TRAPEZOID_CONT)
+        #if ENABLED(LASER_POWER_INLINE_TRAPEZOID_CONT)
+          uint16_t till_update;     // Countdown to the next update
+        #else
           uint32_t last_step_count, // Step count from the last update
                    acc_step_count;  // Bresenham counter for laser accel/decel
-        #else
-          uint16_t till_update;     // Countdown to the next update
         #endif
       } stepper_laser_t;
 
@@ -433,12 +435,7 @@ class Stepper {
     static int32_t position(const AxisEnum axis);
 
     // Set the current position in steps
-    static void set_position(
-      LOGICAL_AXIS_LIST(const int32_t &e, const int32_t &a, const int32_t &b, const int32_t &c)
-    );
-    static inline void set_position(const xyze_long_t &abce) {
-      set_position(LOGICAL_AXIS_LIST(abce.e, abce.a, abce.b, abce.c));
-    }
+    static void set_position(const xyze_long_t &spos);
     static void set_axis_position(const AxisEnum a, const int32_t &v);
 
     // Report the positions of the steppers, in steps
@@ -526,7 +523,7 @@ class Stepper {
     static void set_directions();
 
     // Set direction bits and update all stepper DIR states
-    static void set_directions(const uint8_t bits) {
+    static void set_directions(const axis_bits_t bits) {
       last_direction_bits = bits;
       set_directions();
     }
@@ -534,12 +531,7 @@ class Stepper {
   private:
 
     // Set the current position in steps
-    static void _set_position(
-      LOGICAL_AXIS_LIST(const int32_t &e, const int32_t &a, const int32_t &b, const int32_t &c)
-    );
-    FORCE_INLINE static void _set_position(const abce_long_t &spos) {
-      _set_position(LOGICAL_AXIS_LIST(spos.e, spos.a, spos.b, spos.c));
-    }
+    static void _set_position(const abce_long_t &spos);
 
     FORCE_INLINE static uint32_t calc_timer_interval(uint32_t step_rate, uint8_t *loops) {
       uint32_t timer;

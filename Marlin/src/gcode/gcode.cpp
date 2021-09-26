@@ -74,11 +74,14 @@ millis_t GcodeSuite::previous_move_ms = 0,
 
 // Relative motion mode for each logical axis
 static constexpr xyze_bool_t ar_init = AXIS_RELATIVE_MODES;
-uint8_t GcodeSuite::axis_relative = 0 LOGICAL_AXIS_GANG(
+axis_bits_t GcodeSuite::axis_relative = 0 LOGICAL_AXIS_GANG(
   | (ar_init.e << REL_E),
   | (ar_init.x << REL_X),
   | (ar_init.y << REL_Y),
-  | (ar_init.z << REL_Z)
+  | (ar_init.z << REL_Z),
+  | (ar_init.i << REL_I),
+  | (ar_init.j << REL_J),
+  | (ar_init.k << REL_K)
 );
 
 #if EITHER(HAS_AUTO_REPORTING, HOST_KEEPALIVE_FEATURE)
@@ -99,6 +102,24 @@ uint8_t GcodeSuite::axis_relative = 0 LOGICAL_AXIS_GANG(
   xyz_pos_t GcodeSuite::coordinate_system[MAX_COORDINATE_SYSTEMS];
 #endif
 
+void GcodeSuite::report_echo_start(const bool forReplay) { if (!forReplay) SERIAL_ECHO_START(); }
+void GcodeSuite::report_heading(const bool forReplay, PGM_P const pstr, const bool eol/*=true*/) {
+  if (forReplay) return;
+  if (pstr) {
+    SERIAL_ECHO_START();
+    SERIAL_ECHOPGM("; ");
+    SERIAL_ECHOPGM_P(pstr);
+  }
+  if (eol) { SERIAL_CHAR(':'); SERIAL_EOL(); }
+}
+
+void GcodeSuite::say_units() {
+  SERIAL_ECHOLNPGM_P(
+    TERN_(INCH_MODE_SUPPORT, parser.linear_unit_factor != 1.0 ? PSTR(" (in)") :)
+    PSTR(" (mm)")
+  );
+}
+
 /**
  * Get the target extruder from the T parameter or the active_extruder
  * Return -1 if the T parameter is out of range
@@ -109,7 +130,7 @@ int8_t GcodeSuite::get_target_extruder_from_command() {
     if (e < EXTRUDERS) return e;
     SERIAL_ECHO_START();
     SERIAL_CHAR('M'); SERIAL_ECHO(parser.codenum);
-    SERIAL_ECHOLNPAIR(" " STR_INVALID_EXTRUDER " ", e);
+    SERIAL_ECHOLNPGM(" " STR_INVALID_EXTRUDER " ", e);
     return -1;
   }
   return active_extruder;
@@ -128,12 +149,12 @@ int8_t GcodeSuite::get_target_e_stepper_from_command() {
   if (e == -1)
     SERIAL_ECHOLNPGM(" " STR_E_STEPPER_NOT_SPECIFIED);
   else
-    SERIAL_ECHOLNPAIR(" " STR_INVALID_E_STEPPER " ", e);
+    SERIAL_ECHOLNPGM(" " STR_INVALID_E_STEPPER " ", e);
   return -1;
 }
 
 /**
- * Set XYZE destination and feedrate from the current GCode command
+ * Set XYZIJKE destination and feedrate from the current GCode command
  *
  *  - Set destination from included axis codes
  *  - Set to current for missing axis codes
@@ -177,7 +198,7 @@ void GcodeSuite::get_destination_from_command() {
       recovery.save();
   #endif
 
-  if (parser.linearval('F') > 0)
+  if (parser.floatval('F') > 0)
     feedrate_mm_s = parser.value_feedrate();
 
   #if ENABLED(PRINTCOUNTER)
@@ -194,7 +215,7 @@ void GcodeSuite::get_destination_from_command() {
     // Set the laser power in the planner to configure this move
     if (parser.seen('S')) {
       const float spwr = parser.value_float();
-      cutter.inline_power(TERN(SPINDLE_LASER_PWM, cutter.power_to_range(cutter_power_t(round(spwr))), spwr > 0 ? 255 : 0));
+      cutter.inline_power(TERN(SPINDLE_LASER_USE_PWM, cutter.power_to_range(cutter_power_t(round(spwr))), spwr > 0 ? 255 : 0));
     }
     else if (ENABLED(LASER_MOVE_G0_OFF) && parser.codenum == 0) // G0
       cutter.set_inline_enabled(false);
@@ -289,7 +310,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
   #endif
 
   #if ENABLED(FLOWMETER_SAFETY)
-    if (cooler.fault) {
+    if (cooler.flowfault) {
       SERIAL_ECHO_MSG(STR_FLOWMETER_FAULT);
       return;
     }
@@ -438,20 +459,23 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 3: M3_M4(false); break;                              // M3: Turn ON Laser | Spindle (clockwise), set Power | Speed
         case 4: M3_M4(true ); break;                              // M4: Turn ON Laser | Spindle (counter-clockwise), set Power | Speed
         case 5: M5(); break;                                      // M5: Turn OFF Laser | Spindle
-        #if ENABLED(AIR_EVACUATION)
-          case 10: M10(); break;                                  // M10: Vacuum or Blower motor ON
-          case 11: M11(); break;                                  // M11: Vacuum or Blower motor OFF
-        #endif
       #endif
 
-      #if ENABLED(COOLANT_CONTROL)
-        #if ENABLED(COOLANT_MIST)
-          case 7: M7(); break;                                    // M7: Mist coolant ON
-        #endif
-        #if ENABLED(COOLANT_FLOOD)
-          case 8: M8(); break;                                    // M8: Flood coolant ON
-        #endif
-        case 9: M9(); break;                                      // M9: Coolant OFF
+      #if ENABLED(COOLANT_MIST)
+        case 7: M7(); break;                                      // M7: Coolant Mist ON
+      #endif
+
+      #if EITHER(AIR_ASSIST, COOLANT_FLOOD)
+        case 8: M8(); break;                                      // M8: Air Assist / Coolant Flood ON
+      #endif
+
+      #if EITHER(AIR_ASSIST, COOLANT_CONTROL)
+        case 9: M9(); break;                                      // M9: Air Assist / Coolant OFF
+      #endif
+
+      #if ENABLED(AIR_EVACUATION)
+        case 10: M10(); break;                                    // M10: Vacuum or Blower motor ON
+        case 11: M11(); break;                                    // M11: Vacuum or Blower motor OFF
       #endif
 
       #if ENABLED(EXTERNAL_CLOSED_LOOP_CONTROLLER)
@@ -693,6 +717,9 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         #if ENABLED(EDITABLE_SERVO_ANGLES)
           case 281: M281(); break;                                // M281: Set servo angles
         #endif
+        #if ENABLED(SERVO_DETACH_GCODE)
+          case 282: M282(); break;                                // M282: Detach servo
+        #endif
       #endif
 
       #if ENABLED(BABYSTEPPING)
@@ -721,6 +748,10 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
 
       #if HAS_LCD_CONTRAST
         case 250: M250(); break;                                  // M250: Set LCD contrast
+      #endif
+
+      #if HAS_LCD_BRIGHTNESS
+        case 256: M256(); break;                                  // M256: Set LCD brightness
       #endif
 
       #if ENABLED(EXPERIMENTAL_I2CBUS)
@@ -854,8 +885,8 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 605: M605(); break;                                  // M605: Set Dual X Carriage movement mode
       #endif
 
-      #if ENABLED(DELTA)
-        case 665: M665(); break;                                  // M665: Set delta configurations
+      #if IS_KINEMATIC
+        case 665: M665(); break;                                  // M665: Set Delta/SCARA parameters
       #endif
 
       #if ENABLED(DELTA) || HAS_EXTRA_ENDSTOPS
@@ -902,7 +933,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 907: M907(); break;                                  // M907: Set digital trimpot motor current using axis codes.
         #if EITHER(HAS_MOTOR_CURRENT_SPI, HAS_MOTOR_CURRENT_DAC)
           case 908: M908(); break;                                // M908: Control digital trimpot directly.
-          #if ENABLED(HAS_MOTOR_CURRENT_DAC)
+          #if HAS_MOTOR_CURRENT_DAC
             case 909: M909(); break;                              // M909: Print digipot/DAC current value
             case 910: M910(); break;                              // M910: Commit digipot/DAC value to external EEPROM
           #endif
@@ -1054,7 +1085,7 @@ void GcodeSuite::process_next_command() {
     SERIAL_ECHO_START();
     SERIAL_ECHOLN(command.buffer);
     #if ENABLED(M100_FREE_MEMORY_DUMPER)
-      SERIAL_ECHOPAIR("slot:", queue.ring_buffer.index_r);
+      SERIAL_ECHOPGM("slot:", queue.ring_buffer.index_r);
       M100_dump_routine(PSTR("   Command Queue:"), (const char*)&queue.ring_buffer, sizeof(queue.ring_buffer));
     #endif
   }
