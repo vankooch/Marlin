@@ -52,8 +52,6 @@
   // Motion > Level Bed handlers
   //
 
-  static uint8_t manual_probe_index;
-
   // LCD probed points are from defaults
   constexpr uint8_t total_probe_points = TERN(AUTO_BED_LEVELING_3POINT, 3, GRID_MAX_POINTS);
 
@@ -232,7 +230,7 @@
  *    Mesh Z Offset: ---  (Req: MESH_BED_LEVELING)
  *    Z Probe Offset: --- (Req: HAS_BED_PROBE, Opt: BABYSTEP_ZPROBE_OFFSET)
  *    Level Bed >
- *    Level Corners >     (if homed)
+ *    Bed Tramming >      (if homed)
  *    Load Settings       (Req: EEPROM_SETTINGS)
  *    Save Settings       (Req: EEPROM_SETTINGS)
  */

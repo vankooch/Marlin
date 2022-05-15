@@ -54,7 +54,7 @@
 
 #include "exception_hook.h"
 #include "../backtrace/backtrace.h"
-#include "../HAL_MinSerial.h"
+#include "../MinSerial.h"
 
 #define HW_REG(X)  (*((volatile unsigned long *)(X)))
 
@@ -101,7 +101,7 @@ struct __attribute__((packed)) ContextSavedFrame {
   uint32_t ELR;
 };
 
-#if DISABLED(STM32F0xx)
+#if NONE(STM32F0xx, STM32G0xx)
   extern "C"
   __attribute__((naked)) void CommonHandler_ASM() {
     __asm__ __volatile__ (

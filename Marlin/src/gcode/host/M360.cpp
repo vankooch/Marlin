@@ -93,7 +93,7 @@ void GcodeSuite::M360() {
   //
   #if HAS_CLASSIC_JERK
     if (planner.max_jerk.x == planner.max_jerk.y)
-      config_line(F("XY"), planner.max_jerk.x, JERK_STR);
+      config_line(F("XY"), planner.max_jerk.x, FPSTR(JERK_STR));
     else {
       config_line(X_STR, planner.max_jerk.x, JERK_STR);
       config_line(Y_STR, planner.max_jerk.y, JERK_STR);
@@ -110,15 +110,15 @@ void GcodeSuite::M360() {
     PGMSTR(UNRET_STR, "RetractionUndo");
     PGMSTR(SPEED_STR, "Speed");
     // M10 Retract with swap (long) moves
-    config_line(F("Length"),     fwretract.settings.retract_length, RET_STR);
-    config_line(SPEED_STR,          fwretract.settings.retract_feedrate_mm_s, RET_STR);
-    config_line(F("ZLift"),      fwretract.settings.retract_zraise, RET_STR);
-    config_line(F("LongLength"), fwretract.settings.swap_retract_length, RET_STR);
+    config_line(F("Length"),     fwretract.settings.retract_length, FPSTR(RET_STR));
+    config_line(SPEED_STR,       fwretract.settings.retract_feedrate_mm_s, RET_STR);
+    config_line(F("ZLift"),      fwretract.settings.retract_zraise, FPSTR(RET_STR));
+    config_line(F("LongLength"), fwretract.settings.swap_retract_length, FPSTR(RET_STR));
     // M11 Recover (undo) with swap (long) moves
-    config_line(SPEED_STR,               fwretract.settings.retract_recover_feedrate_mm_s, UNRET_STR);
-    config_line(F("ExtraLength"),     fwretract.settings.retract_recover_extra, UNRET_STR);
-    config_line(F("ExtraLongLength"), fwretract.settings.swap_retract_recover_extra, UNRET_STR);
-    config_line(F("LongSpeed"),       fwretract.settings.swap_retract_recover_feedrate_mm_s, UNRET_STR);
+    config_line(SPEED_STR,            fwretract.settings.retract_recover_feedrate_mm_s, UNRET_STR);
+    config_line(F("ExtraLength"),     fwretract.settings.retract_recover_extra, FPSTR(UNRET_STR));
+    config_line(F("ExtraLongLength"), fwretract.settings.swap_retract_recover_extra, FPSTR(UNRET_STR));
+    config_line(F("LongSpeed"),       fwretract.settings.swap_retract_recover_feedrate_mm_s, FPSTR(UNRET_STR));
   #endif
 
   //
@@ -162,7 +162,8 @@ void GcodeSuite::M360() {
     TERN_(DELTA,         "Delta")
     TERN_(IS_SCARA,      "SCARA")
     TERN_(IS_CORE,       "Core")
-    TERN_(MARKFORGED_XY, "MarkForged")
+    TERN_(MARKFORGED_XY, "MarkForgedXY")
+    TERN_(MARKFORGED_YX, "MarkForgedYX")
     TERN_(IS_CARTESIAN,  "Cartesian")
   );
 
@@ -179,7 +180,7 @@ void GcodeSuite::M360() {
   //
   config_line(F("NumExtruder"), EXTRUDERS);
   #if HAS_EXTRUDERS
-    LOOP_L_N(e, EXTRUDERS) {
+    EXTRUDER_LOOP() {
       config_line_e(e, JERK_STR, TERN(HAS_LINEAR_E_JERK, planner.max_e_jerk[E_INDEX_N(e)], TERN(HAS_CLASSIC_JERK, planner.max_jerk.e, DEFAULT_EJERK)));
       config_line_e(e, F("MaxSpeed"), planner.settings.max_feedrate_mm_s[E_AXIS_N(e)]);
       config_line_e(e, F("Acceleration"), planner.settings.max_acceleration_mm_per_s2[E_AXIS_N(e)]);
